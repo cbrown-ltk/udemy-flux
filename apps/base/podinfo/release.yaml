@@ -23,7 +23,7 @@ spec:
         name: podinfo
     # Scale to explicit number of replicas
     - patch: |
-        - op: replaces
+        - op: replace
           path: /spec/replicas
           value: 1
       target:
