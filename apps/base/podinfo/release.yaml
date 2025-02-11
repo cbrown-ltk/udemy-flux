@@ -11,3 +11,21 @@ spec:
     kind: GitRepository
     name: podinfo
   targetNamespace: default
+  patches:
+    # Remove HPA
+    - patch: |
+        kind: HorizontalPodAutoscaler
+        metadata:
+          name: any
+        $patch: delete
+      target:
+        kind: HorizontalPodAutoscaler
+        name: podinfo
+    # Scale to explicit number of replicas
+    - patch: |
+        - op: replaces
+          path: /spec/replicas
+          value: 1
+      target:
+        kind: Deployment
+        name: podinfo
