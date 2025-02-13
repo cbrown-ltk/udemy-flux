@@ -52,13 +52,14 @@ kubectl get gitrepo
 # flux-system   ssh://git@github.com/cbrown-ltk/udemy-flux   5m22s   True    stored artifact for revision 'main@sha1:2e1b73b26a6c2f0fd39de6542df9172ccb65d7c4'
 ```
 
-## Deploying an app
+## Deploying a FluxCD kustomize app
 
-Deploying [podinfo](https://github.com/stefanprodan/podinfo), following a [monorepo structure](https://fluxcd.io/flux/guides/repository-structure/):
+Deploying a kustomize-based [podinfo](https://github.com/stefanprodan/podinfo), following a [monorepo structure](https://fluxcd.io/flux/guides/repository-structure/):
 
 ```sh
 # helper:
 # alias kk_init='echo -e "apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - ./deployment.yaml\n" > kustomization.yaml'
+# ref: https://kubectl.docs.kubernetes.io/references/kustomize/kustomization/patches/
 
 # lets deploy an app "Podinfo" (TODO -- could also try apps/podinfo/{base,local,env1})
 mkdir -p apps/{base,local}/podinfo
@@ -71,7 +72,7 @@ mkdir -p apps/{base,local}/podinfo
 #         └── podinfo
 ```
 
-First, create the "base" app-template in `apps/base/{appName}` that will be overridden by app-instances in `apps/{cluster}/{appName}:
+First, create the "base" app-template in `apps/base/{appName}` . This will be leveraged (and values possibly customized) by app-instances in `apps/{cluster}/{appName}`:
 
 ```sh
 cd apps/base/podinfo
@@ -134,4 +135,59 @@ flux get sources git
 
 # watch the Kustomization
 flux get ks # --watch
+
+# examine the deployed app
+kn default
+kubectl port-forward deploy/podinfo -- 9898:9898
+
+# in a separate tab
+curl http://localhost:9898
+
+# {
+#   "hostname": "podinfo-9d8789c44-twkzn",
+#   "version": "6.7.1",
+#   "revision": "6b7aab8a10d6ee8b895b0a5048f4ab0966ed29ff",
+#   "color": "#34577c",
+#   "logo": "https://raw.githubusercontent.com/stefanprodan/podinfo/gh-pages/cuddle_clap.gif",
+#   "message": "greetings from podinfo v6.7.1",
+#   "goos": "linux",
+#   "goarch": "arm64",
+#   "runtime": "go1.23.2",
+#   "num_goroutine": "8",
+#   "num_cpu": "2"
+# }
+```
+
+## Deploying a Flux HelmRelease app
+
+Example:
+- [HelmRelease.fluxcd.io](https://github.com/fluxcd/flux2-kustomize-helm-example/blob/main/apps/base/podinfo/release.yaml)
+- Which uses the Helm repo [stefanprodan.github.io/podinfo](https://github.com/stefanprodan/podinfo/tree/master?tab=readme-ov-file#helm)
+
+```sh
+# Create a source for an HTTPS public Helm repository (a Flux "HelmRepository")
+# flux create source helm --help | grep Examples -A29
+flux create source helm stefanprodan \
+    --namespace=flux-system \
+    --url=https://stefanprodan.github.io/podinfo \
+    --interval=10m \
+    --export
+
+# be mindful here of "--namespace", as in "Storage Namespace" versus "Target Namespace"
+# https://fluxcd.io/flux/components/helm/helmreleases/#target-namespace
+HELM_REPO="HelmRepository/stefanprodan.podinfo" # Different namespace
+HELM_REPO="HelmRepository/stefanprodan"
+HELM_REPO="HelmRepository/stefanprodan.flux-system" # same as above
+
+# Create the HelmRelease
+flux create helmrelease podinfo \
+  --namespace=flux-system \
+  --target-namespace=pi \
+  --create-target-namespace=true \
+  --source=$HELM_REPO \
+  --release-name=podinfo \
+  --chart=podinfo \
+  --chart-version=">6.7.0" \
+  --values=apps/local/podinfo-chart/values.yaml \
+  --export > apps/local/podinfo-chart/release.yaml
 ```

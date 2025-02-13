@@ -1,0 +1,4 @@
+# https://github.com/stefanprodan/podinfo/tree/master/charts/podinfo#configuration
+replicaCount: 1
+hpa:
+  enabled: false
